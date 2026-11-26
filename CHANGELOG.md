@@ -6,6 +6,14 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for current direction and
 
 ## Unreleased
 
+- **One unreadable agent file no longer hides every harness worker.** A user or project
+  agent (`~/.claude/agents`, `.claude/agents`) whose description holds an unquoted `: `
+  is valid to Claude Code and was not to Multi, which then dropped the whole agent
+  catalog for that folder. With no catalog, no harness worker type (Cursor, Antigravity,
+  Grok) was offered, while direct ones (OpenAI, Zen) stayed. Such a file is now read the
+  way plugin agents already were, and one that still cannot be read keeps its name,
+  carries no tool rules, and is named once in a notice.
+
 - **Antigravity stays in desktop app sessions.** A desktop session, or plain `claude`
   with the mod, has no launcher to switch Antigravity on, so only the other providers
   connected there, and each such session then removed the Antigravity `/model` rows

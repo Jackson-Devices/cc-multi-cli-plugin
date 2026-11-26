@@ -97,10 +97,28 @@ async function loadScope(directory: string): Promise<Record<string, WorkerPermis
   const files = await agentFiles(directory);
   const permissions: Record<string, WorkerPermissions> = Object.create(null);
   for (const file of files) {
-    const [name, definition] = await readDefinition(file);
+    const [name, definition] = await scopeDefinition(file);
     permissions[name] = definition;
   }
   return permissions;
+}
+
+/**
+ * As with a plugin agent, one unreadable user or project agent must not empty the whole
+ * catalog: an empty catalog offers no harness worker at all. It keeps its file's name and
+ * carries no rules, and the reason is said once.
+ */
+async function scopeDefinition(file: string): Promise<[string, WorkerPermissions]> {
+  try {
+    return await readDefinition(file);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    if (!reportedMalformed.has(file)) {
+      reportedMalformed.add(file);
+      process.stderr.write(`Multi: ${reason}; its tool rules are not applied to native workers.\n`);
+    }
+    return [path.basename(file, '.md'), {}];
+  }
 }
 
 async function agentFiles(directory: string): Promise<string[]> {
@@ -137,15 +155,12 @@ async function readDefinition(file: string): Promise<[string, WorkerPermissions]
   if (!frontmatter) {
     throw new Error(`Agent definition ${file} has no YAML frontmatter`);
   }
-  const document = parseDocument(frontmatter[1]);
-  if (document.errors.length) {
-    throw new Error(`Invalid YAML in agent definition ${file}: ${document.errors[0].message}`);
+  // Claude Code accepts an unquoted `: ` inside a description; so does the lenient parse.
+  const definition = lenientFrontmatter(frontmatter[1]);
+  if (!definition) {
+    const strict = parseDocument(frontmatter[1]).errors[0]?.message ?? 'unreadable frontmatter';
+    throw new Error(`Invalid YAML in agent definition ${file}: ${strict}`);
   }
-  const value = document.toJS();
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    throw new Error(`Agent definition ${file} frontmatter must be an object`);
-  }
-  const definition = value as Record<string, unknown>;
   const name = definition.name;
   if (typeof name !== 'string' || !name) {
     throw new Error(`Agent definition ${file} requires a name`);
