@@ -39,6 +39,14 @@ function withoutClaudeCatalogues(text: string): string {
   );
 }
 
+/**
+ * Claude Code's record of loading a deferred tool: `tool_reference` inside the tool result
+ * of a tool search, and `tool_addition` in the system turn that announces it. They name a
+ * Claude tool a native CLI cannot call, so they carry no text; refusing them made every
+ * conversation that had loaded a deferred tool unusable on a native harness.
+ */
+const TOOL_CATALOGUE_BLOCKS = new Set(['tool_reference', 'tool_addition']);
+
 function blockText(
   block: ContentBlock,
   allowReasoning: boolean,
@@ -47,6 +55,9 @@ function blockText(
 ): string {
   if (block.type === 'text' && typeof block.text === 'string') {
     return options.stripCatalogues ? withoutClaudeCatalogues(block.text) : block.text;
+  }
+  if (TOOL_CATALOGUE_BLOCKS.has(block.type)) {
+    return '';
   }
   if (block.type === 'tool_use') {
     return toolUseText(block, role, options);

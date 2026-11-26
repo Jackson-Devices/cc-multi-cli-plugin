@@ -37,9 +37,10 @@ The picker reads the models advertised by `agy`.
 Suffix variants group behind a base row when no independent base model exists.
 An advertised `-xhigh` variant keeps its own row and always runs at that effort,
 because Claude Code's `/effort` offers these rows only low, medium and high.
-The default variant order is medium, high, then low. `/effort` accepts only an
-advertised low, medium, or high variant. Unknown models and unavailable effort
-variants fail explicitly.
+The default variant order is medium, high, then low. `/effort` selects an
+advertised low, medium, or high variant; a model that does not advertise the
+requested effort (GPT-OSS 120B lists only medium) runs at its default variant
+instead of refusing the turn. Unknown models fail explicitly.
 
 Workers: the Agent tool's `Antigravity` type runs any row above, except
 an id that only adds an effort suffix to another listed row (`<base>-high`

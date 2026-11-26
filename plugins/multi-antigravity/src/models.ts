@@ -172,11 +172,10 @@ export function selectAntigravityModel(
   if (base === selected.id) {
     return { ...selected, effort };
   }
-  const variant = models.find((option) => option.id === `${base}-${effort}`);
-  if (!variant) {
-    throw new Error(`Antigravity model ${selected.id} does not advertise ${effort} effort.`);
-  }
-  return variant;
+  // A model that advertises fewer efforts than Claude offers (GPT-OSS 120B lists only
+  // medium) runs at an advertised one rather than refusing the turn: Claude's session
+  // effort is High by default, and compaction asks for it too.
+  return models.find((option) => option.id === `${base}-${effort}`) ?? selected;
 }
 
 /**

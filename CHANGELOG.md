@@ -6,6 +6,18 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for current direction and
 
 ## Unreleased
 
+- **Antigravity and Grok continue conversations that loaded a deferred tool.** Claude
+  Code records a tool search as `tool_reference` blocks in the tool result and a
+  `tool_addition` block in the system turn. The native prompt converter refused both, so
+  once a conversation had loaded any deferred tool, every later turn on Antigravity or
+  Grok failed with "does not support content block tool_reference" before the CLI ran.
+  They name Claude tools a native CLI cannot call and are now left out of the prompt.
+
+- **GPT-OSS 120B runs at Claude's default effort.** Antigravity lists GPT-OSS only as a
+  medium variant, and a turn at High effort (Claude's default, and what compaction
+  asks for) was refused with "does not advertise high effort". A model that does not
+  advertise the requested effort now runs at its default variant.
+
 - **One unreadable agent file no longer hides every harness worker.** A user or project
   agent (`~/.claude/agents`, `.claude/agents`) whose description holds an unquoted `: `
   is valid to Claude Code and was not to Multi, which then dropped the whole agent
