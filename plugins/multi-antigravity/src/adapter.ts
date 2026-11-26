@@ -1,6 +1,7 @@
 import { resolveExecutable } from '../../multi-core/src/gateway/executable.ts';
 import { mergePermissions } from '../../multi-core/src/gateway/harness-settings.ts';
 import type { ProviderAdapter } from '../../multi-core/src/gateway/provider-adapter.ts';
+import { antigravityCapabilities } from './capabilities.ts';
 import { AntigravityHarness } from './harness.ts';
 import { ensureAntigravityHooks, installAntigravityHook } from './hooks.ts';
 import {
@@ -8,13 +9,10 @@ import {
   antigravityDefaultWorkerModel,
   antigravityPickerOptions,
   discoverAntigravityModels,
-  oneMillionContext,
 } from './models.ts';
 import { antigravityPermissionPolicy } from './permissions.ts';
 import { ANTIGRAVITY_TOOLS } from './progress.ts';
 import { antigravityUsageReader } from './usage-adapter.ts';
-
-const PREFIX = 'multi/antigravity/';
 
 const adapter: ProviderAdapter = {
   async connect({ env, explicit, harnessSettings }) {
@@ -44,19 +42,18 @@ const adapter: ProviderAdapter = {
         return antigravityPermissionPolicy(mergePermissions(context, await harnessSettings(cwd)));
       },
     });
+    // Each row's window and effort levels are what agy itself reports, not a list kept here.
+    const capabilities = await antigravityCapabilities(models, { env });
     return {
       rows: () =>
         antigravityPickerOptions(models).map(({ model, label, id }) => ({
-          model: oneMillionContext(model, id, env),
+          model,
           label,
           description: 'Native Antigravity CLI',
           adjustableEffort: true,
+          capabilities: capabilities.get(id),
         })),
       worker: { defaultId: antigravityDefaultWorkerModel },
-      // An advertised effort variant is collapsed into one synthesized picker row, so a model
-      // selected by its own variant ID matches no row. It is still a real Antigravity model
-      // and takes the same window, so the tag is decided here rather than from the picker.
-      retag: (native) => oneMillionContext(native, native.slice(PREFIX.length), env),
       harness,
       displayTools: ANTIGRAVITY_TOOLS,
       usage: antigravityUsageReader(),

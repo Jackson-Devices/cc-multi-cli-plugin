@@ -6,6 +6,30 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for current direction and
 
 ## Unreleased
 
+- **Antigravity rows no longer vanish from `/model`.** Gemini rows carried a `[1m]` tag
+  on the model ID. Claude Code hides a tagged row on a subscription whose extra usage
+  is off, and it re-reads that state from every Anthropic response, so the rows
+  disappeared after any turn on a Claude model and came back after a turn on another
+  provider. No row carries the tag now; a saved selection spelled with it still resolves.
+
+- **Context windows and effort levels are read from the provider.** Multi sized every
+  row from two guesses: 200K for everything, and 1M for any Antigravity model whose ID
+  began `gemini`. Antigravity rows are now measured through `agy acp` (no prompt is
+  sent) and OpenAI rows from the catalog Codex caches beside its login. A model that
+  reports a million tokens or more is sized 1M and any other 200K, which is all a
+  Claude Code row can state. Claude Opus 5.5 and Sonnet 5.5 on Antigravity report
+  1,000,000 and are now sized 1M, where they were held at 200K. `--capabilities`
+  prints what was found per model, the profile chosen, and what that costs;
+  `npm run test:live:capabilities` checks the probes.
+
+- **OpenAI rows follow Codex's catalog.** The six models were a list in Multi's source.
+  The default rows are still those six, each shown only while Codex lists it, and the
+  full catalog is whatever Codex lists for the account.
+
+- **Any effort level runs on Antigravity.** A level outside low, medium and high was
+  refused. A row sized 1M offers `xhigh` and `max`; a level the model does not
+  advertise runs as the nearest one it does.
+
 - **Antigravity and Grok continue conversations that loaded a deferred tool.** Claude
   Code records a tool search as `tool_reference` blocks in the tool result and a
   `tool_addition` block in the system turn. The native prompt converter refused both, so

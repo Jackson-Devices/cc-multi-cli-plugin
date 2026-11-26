@@ -35,12 +35,12 @@ The picker reads the models advertised by `agy`.
 | Unsuffixed advertised model | `multi/antigravity/<id>` |
 
 Suffix variants group behind a base row when no independent base model exists.
-An advertised `-xhigh` variant keeps its own row and always runs at that effort,
-because Claude Code's `/effort` offers these rows only low, medium and high.
+An advertised `-xhigh` variant keeps its own row and always runs at that effort.
 The default variant order is medium, high, then low. `/effort` selects an
-advertised low, medium, or high variant; a model that does not advertise the
-requested effort (GPT-OSS 120B lists only medium) runs at its default variant
-instead of refusing the turn. Unknown models fail explicitly.
+advertised variant; a level the model does not advertise runs as the nearest one
+it does (GPT-OSS 120B lists only medium, so every level runs as medium; `max` on
+a model that advertises `xhigh` runs as `xhigh`) instead of refusing the turn.
+Unknown models fail explicitly.
 
 Workers: the Agent tool's `Antigravity` type runs any row above, except
 an id that only adds an effort suffix to another listed row (`<base>-high`
@@ -53,18 +53,23 @@ Antigravity picks its advertised low/medium/high variant from it.
 
 ### Context window
 
-Gemini picker rows carry a `[1m]` tag on the model ID, so Claude sizes the
-session to the million input tokens Gemini accepts; an `Antigravity`
-worker resolved to one of these rows keeps the tag on its spawned model. The
-tag is Claude-side display metadata: `agy` never sees it, both spellings select
-the same native model, and `/effort` still offers only the advertised low,
-medium, and high variants.
+Each row's window and effort levels are read from `agy` itself. `agy models` lists
+only IDs and labels, so Multi opens one `agy acp` session, selects each model, and
+reads the window and thinking levels `agy` reports for it. No prompt is sent, so
+nothing is billed. The probe takes a few seconds and its answer is kept for a day in
+`multi-capabilities.json` beside the `agy` settings file.
 
-Other advertised models keep Claude's 200K default, because their window is smaller
-or unestablished: GPT-OSS 120B accepts 131,072 tokens, and the Claude models served
-here carry no 1M entitlement. `agy models` reports no capacity metadata, so the
-eligible families are listed in `multi-antigravity/src/models.ts` rather than discovered. Set
-`MULTI_DISABLE_1M_CONTEXT=1` to leave every row untagged.
+A Claude Code picker row can only be sized 200K or 1M. A model whose measured window
+is a million tokens or more is sized 1M; any other, or one `agy` reports no window
+for, is sized 200K. On 2026-11-26 `agy` 1.5.18 reported 1,048,576 for the Gemini
+models, 1,000,000 for Claude Opus 5.5 and Sonnet 5.5, and 131,072 for GPT-OSS 120B.
+Rows no longer carry a `[1m]` tag: Claude Code hides a tagged row on a subscription
+whose extra usage is off, so those rows used to vanish from `/model`. A saved
+selection spelled with the tag still resolves. Set `MULTI_DISABLE_1M_CONTEXT=1` to
+size every row 200K.
+
+`node plugins/multi-core/src/launcher.ts --capabilities` prints, per model, what was
+found, the profile chosen, and what that costs.
 
 Claude's window governs when the session compacts. It is separate from the native
 `agy` conversation, which keeps its own state and its own limits.

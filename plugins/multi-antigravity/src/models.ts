@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { mapEffort } from '../../multi-core/src/gateway/capabilities.ts';
 import {
   executableInvocation,
   resolveExecutable,
@@ -165,48 +166,42 @@ export function selectAntigravityModel(
   if (effort === undefined || PINNED_EFFORT.test(selected.id)) {
     return selected;
   }
-  if (effort !== 'low' && effort !== 'medium' && effort !== 'high') {
-    throw new Error('Antigravity effort must be an advertised low, medium or high variant.');
+  if (typeof effort !== 'string') {
+    throw new Error('Antigravity effort must be a named level.');
   }
   const base = selected.id.replace(/-(low|medium|high)$/, '');
   if (base === selected.id) {
-    return { ...selected, effort };
+    // No advertised variant: agy takes the level as a flag and validates it itself.
+    const mapped = mapEffort(effort, FLAG_EFFORTS);
+    return { ...selected, effort: FLAG_EFFORTS.find((level) => level === mapped) };
   }
-  // A model that advertises fewer efforts than Claude offers (GPT-OSS 120B lists only
-  // medium) runs at an advertised one rather than refusing the turn: Claude's session
-  // effort is High by default, and compaction asks for it too.
-  return models.find((option) => option.id === `${base}-${effort}`) ?? selected;
+  // Claude offers levels a model may not advertise (GPT-OSS 120B lists only medium, and
+  // Claude's own scale runs to max). The nearest advertised variant runs rather than the
+  // turn being refused: Claude's session effort is High by default, and compaction asks too.
+  const mapped = mapEffort(effort, advertisedEfforts(models, base));
+  return models.find((option) => option.id === `${base}-${mapped}`) ?? selected;
+}
+
+/** The levels the `--effort` flag carried before variants were mapped; agy validates them. */
+const FLAG_EFFORTS = ['low', 'medium', 'high'] as const;
+
+const VARIANT_EFFORTS = ['low', 'medium', 'high', 'xhigh'];
+
+/** The effort variants `agy models` advertises for a base model, weakest first. */
+export function advertisedEfforts(models: readonly AntigravityModel[], base: string): string[] {
+  return VARIANT_EFFORTS.filter((effort) => models.some(({ id }) => id === `${base}-${effort}`));
 }
 
 /**
- * Families whose native input window is about a million tokens. Gemini 3.x Flash and Pro
- * take 1,048,576. Every other advertised model keeps the conservative default, because its
- * window is smaller or unestablished: GPT-OSS 120B takes 131,072, and the Claude models
- * served here carry no 1M entitlement. The native catalog reports no capacity metadata, so
- * this list is the only place that claim is made.
+ * The native model a picker row stands for when no effort is asked: the row's own ID when
+ * `agy models` lists it, else the default variant of the base it groups.
  */
-const ONE_MILLION_FAMILIES = /^gemini(?:-|$)/;
-
-/** An opt-out set to an explicit negative reads as off, not as "the variable is present". */
-function optedOut(value: string | undefined): boolean {
-  return value !== undefined && !['', '0', 'false', 'no', 'off'].includes(value.toLowerCase());
+export function rowModel(models: readonly AntigravityModel[], rowId: string): string {
+  return models.some(({ id }) => id === rowId) ? rowId : defaultVariant(models, rowId).id;
 }
 
-/**
- * Claude reads a row's context window from a `[1m]` tag on the model ID before it consults
- * the `behavesAs` profile, and it matches `behavesAs` on the untagged spelling. Tagging a
- * row therefore states the provider's real window without adopting a Claude profile that
- * also advertises effort levels the provider does not have. The harness strips the tag
- * before it resolves the native model. `MULTI_DISABLE_1M_CONTEXT` opts out.
- */
-export function oneMillionContext(
-  model: string,
-  id: string,
-  env: NodeJS.ProcessEnv = process.env,
-): string {
-  const family = id.replace(/-(low|medium|high)$/, '');
-  if (optedOut(env.MULTI_DISABLE_1M_CONTEXT) || !ONE_MILLION_FAMILIES.test(family)) {
-    return model;
-  }
-  return `${model}[1m]`;
+/** Whether a row is an effort pinned beside its own base row, such as `<base>-xhigh`. */
+export function pinnedRow(models: readonly AntigravityModel[], rowId: string): boolean {
+  const base = rowId.replace(PINNED_EFFORT, '');
+  return base !== rowId && advertisedEfforts(models, base).some((effort) => effort !== 'xhigh');
 }

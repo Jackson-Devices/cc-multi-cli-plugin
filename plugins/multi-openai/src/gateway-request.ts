@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { mapEffort } from '../../multi-core/src/gateway/capabilities.ts';
 import type { GatewayFetch } from '../../multi-core/src/gateway/fetch.ts';
 import type {
   PreparedRequest,
@@ -6,6 +7,7 @@ import type {
 } from '../../multi-core/src/gateway/provider-request.ts';
 import { ProviderAuthError } from '../../multi-core/src/gateway/provider-request.ts';
 import {
+  type Effort,
   fromResponses,
   OPENAI_SIGNATURE_PREFIX,
   toResponses,
@@ -13,8 +15,8 @@ import {
 import { estimateInputTokens } from '../../multi-core/src/gateway/tokens.ts';
 import { originalToolNames } from '../../multi-core/src/gateway/tools.ts';
 import { CodexAuthError, codexRequest } from './auth.ts';
+import type { OpenAIModel } from './catalog.ts';
 import { openaiInstructions } from './instructions.ts';
-import { MODELS } from './models.ts';
 
 const OPENAI_URL = 'https://chatgpt.com/backend-api/codex/responses';
 const MESSAGES_PATHS = ['/v1/messages', '/v1/messages/count_tokens'];
@@ -23,6 +25,15 @@ const MESSAGES_PATHS = ['/v1/messages', '/v1/messages/count_tokens'];
 export const openaiSignaturePrefixes: readonly string[] = [OPENAI_SIGNATURE_PREFIX];
 
 const openaiAuthHelp = ' Renew the Codex login.';
+
+/** The effort names a Responses request can carry. */
+const SENDABLE: readonly Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
+
+/** The model's own level nearest the one Claude asked for, so no turn fails over a level. */
+function providerEffort(requested: Effort, available: readonly string[]): Effort {
+  const mapped = mapEffort(requested, available);
+  return SENDABLE.find((effort) => effort === mapped) ?? requested;
+}
 
 /** The Responses request for one Claude request to a native `multi/openai/` model. */
 export function prepareOpenAIRequest(
@@ -37,17 +48,22 @@ export function prepareOpenAIRequest(
   }: ProviderRequestInput,
   externalModel: string,
   authFile: string,
+  catalog: readonly OpenAIModel[],
 ): PreparedRequest {
-  const model = Object.values(MODELS).find((model) => externalModel === `multi/openai/${model}`);
+  const model = catalog.find(({ slug }) => externalModel === `multi/openai/${slug}`);
   if (!model) {
     throw new Error('Unknown native OpenAI model');
   }
   if (!MESSAGES_PATHS.includes(pathname) || method !== 'POST') {
     throw new Error('External models require POST /v1/messages or /v1/messages/count_tokens');
   }
-  const translated = toResponses(body, model);
+  const translated = toResponses(body, model.slug);
   const request = {
     ...translated,
+    reasoning: {
+      ...translated.reasoning,
+      effort: providerEffort(translated.reasoning.effort, model.capabilities.efforts),
+    },
     instructions: openaiInstructions(translated.instructions),
     prompt_cache_key: createHash('sha256')
       .update(

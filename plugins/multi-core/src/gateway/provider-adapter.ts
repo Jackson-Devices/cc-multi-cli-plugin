@@ -4,6 +4,7 @@
 
 import { pathToFileURL } from 'node:url';
 import type { WorkerPermissions } from './agent-definitions.ts';
+import type { ModelCapabilities } from './capabilities.ts';
 import type { NativeHarness } from './native-harness.ts';
 import { type ProviderManifest, providerDirectory, providerManifests } from './provider.ts';
 import type { PreparedRequest, ProviderRequestInput } from './provider-request.ts';
@@ -17,6 +18,8 @@ interface PickerRow {
   description: string;
   /** Whether Claude Code's `/effort` applies to the row. */
   adjustableEffort: boolean;
+  /** What the provider reports this model can do; absent when it reports nothing. */
+  capabilities?: ModelCapabilities;
 }
 
 /** What core hands a provider when a session launches. */

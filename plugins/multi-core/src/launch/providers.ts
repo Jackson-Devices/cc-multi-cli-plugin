@@ -1,6 +1,7 @@
 // The providers of this launch: which are enabled, which connect, what each one's native
 // runs answer to, and the launcher flags each one owns.
 
+import { capabilityReport } from '../gateway/capabilities.ts';
 import { readHarnessSettings } from '../gateway/harness-settings.ts';
 import {
   type ConnectedProvider,
@@ -83,6 +84,7 @@ function help(loaded: readonly LoadedProvider[]): string {
   return [
     `Usage: node plugins/multi-core/src/launcher.ts [${commands.map(([flag]) => flag).join(' | ')}] [-- <claude arguments>]`,
     'Launch Claude with external models and native coding workers.',
+    '--capabilities: what each connected provider reports per model, and the Claude Code profile chosen for it',
     ...commands.map(([flag, command]) => `${flag}: ${command.help}`),
     ...environment.map(([name, text]) => `${name}: ${text}`),
     'MULTI_MODELS: comma-separated full model IDs to show in /model (unset: defaults; empty: hide external rows)',
@@ -97,6 +99,18 @@ export async function handleCommand(command: string | undefined, loaded = loadPr
   const providers = await loaded;
   if (command === '--help') {
     console.log(help(providers));
+    process.exit(0);
+  }
+  if (command === '--capabilities') {
+    const connected = await connectProviders(providers, { args: [] });
+    console.log(
+      capabilityReport(
+        Object.entries(connected).flatMap(([provider, { rows }]) =>
+          rows(true).map((row) => ({ provider, ...row })),
+        ),
+      ),
+    );
+    await closeHarnesses(connected);
     process.exit(0);
   }
   for (const { adapter } of providers) {

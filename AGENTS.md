@@ -100,6 +100,7 @@ the provider is signed in. For Claude Mods hook or surface changes, also run
 | `npm run test:live:grok` | Grok Build CLI harness | Grok Build login |
 | `npm run test:live:front-door` | Gateway as Claude Code's proxy (Remote Control path) and an OpenAI worker | Claude and Codex login |
 | `npm run test:live:desktop` | A desktop app session (the app's bundled Claude Code and environment) served by the mod: an OpenAI worker, the front door once setup installed its certificate, and the gateway ending with the session | Claude and Codex login |
+| `npm run test:live:capabilities` | Capability probes: the windows and effort levels Codex and `agy` report, and the profile chosen (no prompt sent) | Codex or `agy` login |
 | `npm run test:live:install` | Plugin installation | None |
 
 The definition of done is passing relevant checks, no `DEP0190` warnings, and an

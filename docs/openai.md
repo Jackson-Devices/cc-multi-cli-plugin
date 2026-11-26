@@ -15,8 +15,19 @@ Codex stores the ChatGPT login in its `auth.json`. Credential renewal is CLI-own
 
 Use `/model multi/openai/<model-id>` or choose a row in `/model`. Use `/effort <value>` for the main session.
 
-Models: `gpt-6.2-sol`, `gpt-6.2-astra`, `gpt-6.1-sol`, `gpt-6-astra`, `gpt-6.1-terra`,
-`gpt-6-luna`.
+Default rows: `gpt-6.2-sol`, `gpt-6.2-astra`, `gpt-6.1-sol`, `gpt-6-astra`,
+`gpt-6.1-terra`, `gpt-6-luna`, each shown only while Codex still lists it. The full
+catalog is every model Codex lists for the account.
+
+Models, windows and effort levels come from the catalog Codex fetches and caches as
+`models_cache.json` beside its login; Multi makes no catalog request of its own. If
+that file cannot be read, the default rows are offered with no window claimed.
+
+A Claude Code picker row can only be sized 200K or 1M, and no Codex model reports a
+million-token window (272,000 or 500,000 on 2026-11-25), so every OpenAI row is sized
+200K. `/effort` offers low, medium and high on these rows; a level a model does not
+list runs as the nearest one it does.
+`node plugins/multi-core/src/launcher.ts --capabilities` prints the figures per model.
 
 ## Workers
 

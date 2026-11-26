@@ -3,6 +3,7 @@ import path from 'node:path';
 import type { ProviderAdapter } from '../../multi-core/src/gateway/provider-adapter.ts';
 import { createOpenAIReviewer, discoverOpenAIReviewer } from './approval.ts';
 import { readCodexAuth } from './auth.ts';
+import { curatedModels, openaiCatalog } from './catalog.ts';
 import { openaiSignaturePrefixes, prepareOpenAIRequest } from './gateway-request.ts';
 import { MODELS, OPENAI_DEFAULT_WORKER_MODEL, OPENAI_WORKER_EFFORT } from './models.ts';
 import { openAIUsageReader } from './usage-adapter.ts';
@@ -30,19 +31,26 @@ async function signIn(authFile: string) {
 const adapter: ProviderAdapter = {
   signaturePrefixes: openaiSignaturePrefixes,
   async connect({ cwd, env }) {
-    const authFile = path.join(env.CODEX_HOME || path.join(os.homedir(), '.codex'), 'auth.json');
-    const { signedIn, reviewed } = await signIn(authFile);
+    const codexHome = env.CODEX_HOME || path.join(os.homedir(), '.codex');
+    const authFile = path.join(codexHome, 'auth.json');
+    const [{ signedIn, reviewed }, catalog] = await Promise.all([
+      signIn(authFile),
+      openaiCatalog(codexHome),
+    ]);
+    const offered = signedIn ? catalog : [];
     return {
-      rows: () =>
-        Object.values(signedIn ? MODELS : {}).map((model) => ({
-          model: `multi/openai/${model}`,
-          label: model,
+      // The curated rows by default; the whole catalog Codex lists when asked for it.
+      rows: (fullCatalog) =>
+        (fullCatalog ? offered : curatedModels(offered)).map(({ slug, capabilities }) => ({
+          model: `multi/openai/${slug}`,
+          label: slug,
           description: 'OpenAI subscription · native Claude Code harness',
           adjustableEffort: true,
+          capabilities,
         })),
       worker: { defaultId: () => OPENAI_DEFAULT_WORKER_MODEL, effort: OPENAI_WORKER_EFFORT },
       fallbackModel: `multi/openai/${MODELS['openai-luna']}`,
-      prepare: (input, model) => prepareOpenAIRequest(input, model, authFile),
+      prepare: (input, model) => prepareOpenAIRequest(input, model, authFile, catalog),
       reviewer: reviewed
         ? {
             review: await createOpenAIReviewer(authFile, cwd),

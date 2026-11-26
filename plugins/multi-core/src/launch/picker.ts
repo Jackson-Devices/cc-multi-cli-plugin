@@ -3,6 +3,7 @@
 import { readFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { selectProfile } from '../gateway/capabilities.ts';
 import { nativeSpelling, providerOf } from '../gateway/provider.ts';
 import type { ConnectedProviders } from './providers.ts';
 
@@ -213,24 +214,23 @@ async function savedSelection(args: string[]) {
   return savedModel;
 }
 
-/** Client compatibility only, not provider equivalence. Both profiles default to 200K
- * in Claude 2.1.267; newer xhigh profiles imply native 1M and are deliberately not used.
- * Provider validation remains authoritative for every requested effort value. */
-function pickerProfile(adjustableEffort: boolean): string {
-  return adjustableEffort ? 'claude-sonnet-4-6' : 'claude-haiku-4-5';
-}
-
-/** Every connected provider's `/model` rows, in provider order. */
+/**
+ * Every connected provider's `/model` rows, in provider order. `behavesAs` is client
+ * compatibility only, not provider equivalence: it is chosen from what the provider reports
+ * the model can do, and the provider stays authoritative for every requested effort value.
+ */
 export function pickerSettings(providers: ConnectedProviders, fullCatalog = false): LaunchSettings {
   return {
     modelPicker: {
       options: Object.values(providers).flatMap((provider) =>
-        provider.rows(fullCatalog).map(({ model, label, description, adjustableEffort }) => ({
-          model,
-          label,
-          description,
-          behavesAs: pickerProfile(adjustableEffort),
-        })),
+        provider
+          .rows(fullCatalog)
+          .map(({ model, label, description, adjustableEffort, capabilities }) => ({
+            model,
+            label,
+            description,
+            behavesAs: selectProfile(capabilities, adjustableEffort).behavesAs,
+          })),
       ),
     },
   };
