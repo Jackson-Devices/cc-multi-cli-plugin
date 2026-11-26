@@ -10,7 +10,7 @@ import { installedCertificate, trusts } from './launch/certificate.ts';
 import { pluginInventoryOrEmpty } from './launch/claude.ts';
 import { handshake, savedModels } from './launch/desktop.ts';
 import { frontDoorFor, type OpenGateway, openGateway } from './launch/gateway.ts';
-import { type CallerSettings, connectProviders } from './launch/providers.ts';
+import { type CallerSettings, connectProviders, servedProviders } from './launch/providers.ts';
 
 const PARENT_CHECK_MS = 2000;
 
@@ -27,9 +27,11 @@ async function main() {
   const args: string[] = [];
   const caller: CallerSettings = { args };
   const loaded = loadProviders();
-  const [pluginInventory, providers, installed] = await Promise.all([
-    pluginInventoryOrEmpty(cwd, args),
-    loaded.then((all) => connectProviders(all, caller)),
+  // No launcher chose this session's providers, so Claude's own plugin list does: the
+  // inventory is read first, and only the providers it enables are connected.
+  const [pluginInventory, all] = await Promise.all([pluginInventoryOrEmpty(cwd, args), loaded]);
+  const [providers, installed] = await Promise.all([
+    connectProviders(all, caller, servedProviders(all, pluginInventory.providers)),
     installedCertificate(),
   ]);
   // The desktop app runs only signed in to Claude, so Anthropic passthrough stays open.

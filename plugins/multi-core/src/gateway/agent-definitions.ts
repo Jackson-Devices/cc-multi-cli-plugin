@@ -38,7 +38,12 @@ const BUILTIN_WORKERS: Readonly<Record<string, WorkerPermissions>> = {
 export interface PluginPermissionInventory {
   permissions: Record<string, WorkerPermissions>;
   multiCoreEnabled: boolean;
+  /** Providers whose plugins Claude lists as enabled; absent when the list was not read. */
+  providers?: string[];
 }
+
+/** A provider plugin's id, as the installed launch command reads it (install/plugins.ts). */
+const PROVIDER_PLUGIN = /^multi-([a-z]+)@cc-multi-cli-plugin$/;
 
 export async function loadWorkerPermissions(
   cwd: string,
@@ -224,6 +229,7 @@ export async function pluginPermissions(
   }
   const permissions: Record<string, WorkerPermissions> = Object.create(null);
   let multiCoreEnabled = false;
+  const providers = new Set<string>();
   for (const plugin of plugins) {
     if (!activePlugin(plugin, cwd)) {
       continue;
@@ -232,9 +238,13 @@ export async function pluginPermissions(
       throw new Error('Invalid enabled Claude plugin');
     }
     multiCoreEnabled ||= plugin.id === 'multi-core@cc-multi-cli-plugin';
+    const provider = PROVIDER_PLUGIN.exec(plugin.id)?.[1];
+    if (provider !== undefined && provider !== 'core') {
+      providers.add(provider);
+    }
     Object.assign(permissions, await pluginAgents(plugin.installPath, plugin.id.split('@')[0]));
   }
-  return { permissions, multiCoreEnabled };
+  return { permissions, multiCoreEnabled, providers: [...providers] };
 }
 
 interface ListedPlugin {

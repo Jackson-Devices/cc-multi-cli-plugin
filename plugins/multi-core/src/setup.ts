@@ -7,7 +7,7 @@ import {
   setup,
   trustFrontDoor,
 } from './install/installation.ts';
-import { installCertificate } from './launch/certificate.ts';
+import { certificateFiles, installCertificate } from './launch/certificate.ts';
 import { refreshPickerRows } from './launch/desktop.ts';
 
 function detectedShell(env: NodeJS.ProcessEnv, platform: NodeJS.Platform) {
@@ -85,7 +85,7 @@ async function main() {
  */
 async function setUpDesktop() {
   const settingsFile = claudeSettingsFile();
-  const previous = await previousExtraCerts(settingsFile);
+  const previous = await previousExtraCerts(settingsFile, process.env, certificateFiles().trust);
   const trustFile = await installCertificate(previous);
   await trustFrontDoor({
     settingsFile,

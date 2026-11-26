@@ -1,4 +1,4 @@
-import { type SpawnOptions, spawn } from 'node:child_process';
+import { execFileSync, type SpawnOptions, spawn } from 'node:child_process';
 import { constants } from 'node:fs';
 import {
   access,
@@ -58,7 +58,12 @@ export interface InstallationOptions {
   command?: string;
   /** Picker rows to show: `all`, `none`, IDs, or `+<ids>` to extend the saved selection. */
   models?: string;
+  /** Runs a PowerShell and returns its output; setup asks it where the profile is. */
+  profileProbe?: ProfileProbe;
 }
+
+/** Run `command` with `args` and return what it printed; throws when it cannot run. */
+type ProfileProbe = (command: string, args: string[]) => string;
 
 export const DEFAULT_COMMAND = 'claude-multi';
 /** The management shim; `<command> --multi` and `multi` reach the same dispatcher. */
@@ -271,12 +276,52 @@ async function previousInstallation(directory: string) {
   return undefined;
 }
 
-function shellFile(homedir: string, shell: string, platform: Platform, env: NodeJS.ProcessEnv) {
+function runProfileProbe(command: string, args: string[]): string {
+  return execFileSync(command, args, {
+    encoding: 'utf8',
+    timeout: 10000,
+    windowsHide: true,
+    stdio: ['ignore', 'pipe', 'ignore'],
+  });
+}
+
+/**
+ * The profile PowerShell loads. `$PROFILE` is a PowerShell variable, never an environment
+ * variable, and the Documents folder it sits in is often redirected (OneDrive), so the path
+ * is asked of PowerShell itself: PowerShell 7 first, then Windows PowerShell. `env.PROFILE`
+ * still overrides, and the fixed Documents path remains the answer when neither runs.
+ */
+function powershellProfile(homedir: string, env: NodeJS.ProcessEnv, probe: ProfileProbe): string {
+  if (env.PROFILE) {
+    return env.PROFILE;
+  }
+  for (const shell of ['pwsh', 'powershell']) {
+    try {
+      const answer = probe(shell, [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        '$PROFILE.CurrentUserCurrentHost',
+      ]).trim();
+      if (answer && path.win32.isAbsolute(answer)) {
+        return answer;
+      }
+    } catch {
+      // This PowerShell is absent or did not answer; the next one may.
+    }
+  }
+  return path.join(homedir, 'Documents', 'PowerShell', 'Microsoft.PowerShell_profile.ps1');
+}
+
+function shellFile(
+  homedir: string,
+  shell: string,
+  platform: Platform,
+  env: NodeJS.ProcessEnv,
+  probe: ProfileProbe = runProfileProbe,
+) {
   if (platform === 'win32') {
-    return (
-      env.PROFILE ??
-      path.join(homedir, 'Documents', 'PowerShell', 'Microsoft.PowerShell_profile.ps1')
-    );
+    return powershellProfile(homedir, env, probe);
   }
   let relative = '.config/fish/config.fish';
   if (shell === 'bash') {
@@ -385,17 +430,34 @@ async function writeClaudeSettings(file: string, settings: ClaudeSettings) {
   await rename(`${file}.multi.tmp`, file);
 }
 
-/** The extra certificates the user had named before Multi's trust file, if any. */
+function sameFile(left: string, right: string, platform: Platform): boolean {
+  const resolved = [left, right].map((file) => path.resolve(file));
+  return platform === 'win32'
+    ? resolved[0].toLowerCase() === resolved[1].toLowerCase()
+    : resolved[0] === resolved[1];
+}
+
+/**
+ * The extra certificates the user had named before Multi's trust file, if any. Multi's own
+ * trust file (`ownTrustFile`) is never the user's: a session started under an earlier
+ * installation still carries it in its environment after an uninstall removed the file.
+ */
 export async function previousExtraCerts(
   file: string,
   env: NodeJS.ProcessEnv = process.env,
+  ownTrustFile?: string,
+  platform: Platform = process.platform,
 ): Promise<string | undefined> {
   const state = await optionalState();
   const named = (await readClaudeSettings(file)).env?.NODE_EXTRA_CA_CERTS;
   if (state?.desktop && named === state.desktop.trustFile) {
     return state.desktop.previousExtraCerts;
   }
-  return named ?? env.NODE_EXTRA_CA_CERTS;
+  const previous = named ?? env.NODE_EXTRA_CA_CERTS;
+  if (previous && ownTrustFile && sameFile(previous, ownTrustFile, platform)) {
+    return undefined;
+  }
+  return previous;
 }
 
 async function optionalState(directory = installationDirectory()) {
@@ -485,7 +547,13 @@ export async function setup(
   validateRuntime(normalizedShell, resolved.platform);
   const directory = installationDirectory(resolved.homedir);
   const previous = await previousInstallation(directory);
-  const startupFile = shellFile(resolved.homedir, normalizedShell, resolved.platform, resolved.env);
+  const startupFile = shellFile(
+    resolved.homedir,
+    normalizedShell,
+    resolved.platform,
+    resolved.env,
+    options.profileProbe,
+  );
   if (previous && previous.shellFile !== startupFile) {
     throw new Error('Uninstall the existing shell integration before changing shells.');
   }

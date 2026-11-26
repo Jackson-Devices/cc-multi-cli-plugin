@@ -4,9 +4,10 @@
 
 import { loadProviders } from '../gateway/provider-adapter.ts';
 import { readInstallation, updatePickerRows } from '../install/installation.ts';
+import { pluginInventoryOrEmpty } from './claude.ts';
 import type { OpenGateway } from './gateway.ts';
 import { filterPicker, pickerSettings } from './picker.ts';
-import { connectProviders } from './providers.ts';
+import { connectProviders, servedProviders } from './providers.ts';
 
 /**
  * The variables a desktop session takes from the gateway. The mod sets each by name and
@@ -93,8 +94,17 @@ export async function savedModels(): Promise<string | undefined> {
 
 /** Write the connected providers' `/model` rows to Claude's user settings (setup.ts). */
 export async function refreshPickerRows(): Promise<void> {
-  const loaded = loadProviders();
-  const providers = await connectProviders(await loaded, { args: [] });
+  // Setup runs outside any launch, so the rows are those of the providers a desktop
+  // session will connect (serve.ts): the ones whose plugins Claude lists as enabled.
+  const [loaded, inventory] = await Promise.all([
+    loadProviders(),
+    pluginInventoryOrEmpty(process.cwd(), []),
+  ]);
+  const providers = await connectProviders(
+    loaded,
+    { args: [] },
+    servedProviders(loaded, inventory.providers),
+  );
   const selection = await savedModels();
   const fullCatalog = selection !== undefined;
   const defaults = fullCatalog

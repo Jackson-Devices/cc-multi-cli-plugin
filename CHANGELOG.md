@@ -6,6 +6,26 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for current direction and
 
 ## Unreleased
 
+- **Antigravity stays in desktop app sessions.** A desktop session, or plain `claude`
+  with the mod, has no launcher to switch Antigravity on, so only the other providers
+  connected there, and each such session then removed the Antigravity `/model` rows
+  that setup or a `claude-multi` launch had written. Setup's own rows left Antigravity
+  out for the same reason. A session without a launcher now connects the providers
+  whose plugins Claude lists as enabled, as `claude-multi` does, and setup writes
+  their rows.
+
+- **Setup finds the PowerShell profile when Documents is redirected.** On Windows,
+  setup wrote its PATH line to `<home>\Documents\PowerShell\...`. With Documents
+  redirected (OneDrive), PowerShell loads its profile from elsewhere, so the launch
+  command was never on PATH although setup reported success. Setup now asks
+  PowerShell where its profile is; `PROFILE` in the environment still overrides.
+
+- **Setup can run again after an uninstall in the same session.** A session started
+  while Multi was installed keeps `NODE_EXTRA_CA_CERTS` naming Multi's trust file
+  after `multi uninstall` removes it. The next setup took that as your own
+  certificate file and stopped with "Cannot read the certificates
+  NODE_EXTRA_CA_CERTS names". Multi's own trust file is no longer read as yours.
+
 - **Provider workers survive Claude Code's built-in plugins.** Recent Claude Code
   releases list built-in plugins (`<name>@builtin`) as enabled with no install path.
   Multi rejected the whole plugin list over them, printed "could not list Claude

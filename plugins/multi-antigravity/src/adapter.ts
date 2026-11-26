@@ -17,11 +17,12 @@ import { antigravityUsageReader } from './usage-adapter.ts';
 const PREFIX = 'multi/antigravity/';
 
 const adapter: ProviderAdapter = {
-  async connect({ env, harnessSettings }) {
+  async connect({ env, explicit, harnessSettings }) {
     let models: AntigravityModel[] = [];
-    // The permission hook is global to the machine, so the provider is opt-in: the installed
-    // command sets MULTI_ANTIGRAVITY=1 when its plugin is enabled, as does a launch by hand.
-    if (env.MULTI_ANTIGRAVITY === '1') {
+    // The permission hook is global to the machine, so the provider is opt-in: the session's
+    // plugin selection names it when its plugin is enabled (the installed command also sets
+    // MULTI_ANTIGRAVITY=1 then), and a launch by hand sets MULTI_ANTIGRAVITY=1 itself.
+    if (explicit || env.MULTI_ANTIGRAVITY === '1') {
       try {
         resolveExecutable('agy');
         models = await discoverAntigravityModels();

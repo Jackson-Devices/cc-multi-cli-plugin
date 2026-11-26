@@ -14,7 +14,6 @@ import type { LaunchSettings } from './picker.ts';
 export type ConnectedProviders = Readonly<Record<string, ConnectedProvider>>;
 
 export const enabledProviders = providerSelection(process.env.MULTI_ENABLED_PROVIDERS);
-const providerEnabled = (provider: string) => enabledProviders?.includes(provider) ?? true;
 
 /** The caller's settings are known only once the picker is built; native runs read them later. */
 export interface CallerSettings {
@@ -23,26 +22,41 @@ export interface CallerSettings {
 }
 
 /**
+ * The providers a session the mod serves uses. The installed launch command passes its
+ * selection in the environment; a desktop app session has no launcher, so it takes the
+ * providers whose plugins Claude lists as enabled, which is what that command would pass.
+ * A plugin no provider folder answers to is left out rather than refused.
+ */
+export function servedProviders(
+  loaded: readonly LoadedProvider[],
+  installed: readonly string[] | undefined,
+): string[] | undefined {
+  if (enabledProviders !== undefined || installed === undefined) {
+    return enabledProviders;
+  }
+  return installed.filter((name) => loaded.some(({ manifest }) => manifest.name === name));
+}
+
+/**
  * Connect every enabled provider at once: the probes are independent, and one model
- * listing alone can take 15 s.
+ * listing alone can take 15 s. `selection` is the launch's provider selection.
  */
 export async function connectProviders(
   loaded: readonly LoadedProvider[],
   caller: CallerSettings,
+  selection: readonly string[] | undefined = enabledProviders,
 ): Promise<ConnectedProviders> {
-  const unknown = enabledProviders?.find(
-    (name) => !loaded.some(({ manifest }) => manifest.name === name),
-  );
+  const unknown = selection?.find((name) => !loaded.some(({ manifest }) => manifest.name === name));
   if (unknown !== undefined) {
     throw new Error(`Unknown Multi provider: ${unknown}`);
   }
-  const enabled = loaded.filter(({ manifest }) => providerEnabled(manifest.name));
+  const enabled = loaded.filter(({ manifest }) => selection?.includes(manifest.name) ?? true);
   const connected = await Promise.all(
     enabled.map(({ manifest, adapter }) =>
       adapter.connect({
         cwd: process.cwd(),
         env: process.env,
-        explicit: enabledProviders?.includes(manifest.name) ?? false,
+        explicit: selection?.includes(manifest.name) ?? false,
         harnessSettings: (cwd) => readHarnessSettings(cwd, caller.args, caller.settings ?? {}),
       }),
     ),
