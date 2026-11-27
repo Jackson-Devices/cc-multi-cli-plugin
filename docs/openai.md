@@ -23,10 +23,14 @@ Models, windows and effort levels come from the catalog Codex fetches and caches
 `models_cache.json` beside its login; Multi makes no catalog request of its own. If
 that file cannot be read, the default rows are offered with no window claimed.
 
-A Claude Code picker row can only be sized 200K or 1M, and no Codex model reports a
-million-token window (272,000 or 500,000 on 2026-11-25), so every OpenAI row is sized
-200K. `/effort` offers low, medium and high on these rows; a level a model does not
-list runs as the nearest one it does.
+A row's window is the catalog's `max_context_window` (872,000 input tokens on
+2026-11-27), not its `context_window`, which is only where the Codex app starts a
+session (272,000 or 500,000). The provider accepts the larger figure: one request of
+838,527 input tokens to `gpt-6.2-sol` answered. A Claude Code picker row can only be
+sized 200K or 1M, so these rows are sized 1M. Claude Code therefore does not compact
+on its own before 872,000; past that a turn fails until you run `/compact`. `/effort`
+offers low to max on these rows; a level a model does not list runs as the nearest one
+it does.
 `node plugins/multi-core/src/launcher.ts --capabilities` prints the figures per model.
 
 ## Workers

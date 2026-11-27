@@ -21,6 +21,10 @@ node_modules
 /docs/assets/promo/
 /scripts/render-promo.mjs
 
+# Estate message-bus mailbox (outbox envelopes, subscriptions, read cursor). This fork is
+# public and the envelopes describe a private estate, so the mailbox stays local.
+/docs/relay/
+
 # Node diagnostic reports written by test/watchdog.ts
 report.*.json
 

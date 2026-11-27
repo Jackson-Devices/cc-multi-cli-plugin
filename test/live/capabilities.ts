@@ -14,6 +14,7 @@ import { closeHarnesses, connectProviders } from '../../plugins/multi-core/src/l
 
 const PROBED = ['openai', 'antigravity'];
 const MILLION = 1_000_000;
+const LONG_CONTEXT_FLOOR = 800_000;
 
 /** Every row of the connected providers: measured, untagged, and never sized up. */
 async function checkRows(): Promise<number> {
@@ -36,9 +37,10 @@ async function checkRows(): Promise<number> {
         // Claude Code hides a tagged row on a subscription whose extra usage is off.
         assert(!row.model.includes('[1m]'), `${row.model} carries a context tag`);
         const choice = selectProfile(row.capabilities, row.adjustableEffort, true);
+        // A row may be sized 1M only when its measured window is within reach of a million.
         assert(
-          choice.window < MILLION || (row.capabilities?.window ?? 0) >= MILLION,
-          `${row.model} is sized ${choice.window} above its measured window`,
+          choice.window < MILLION || (row.capabilities?.window ?? 0) >= LONG_CONTEXT_FLOOR,
+          `${row.model} is sized ${choice.window} far above its measured window`,
         );
         checked++;
       }

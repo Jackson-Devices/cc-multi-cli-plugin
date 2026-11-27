@@ -36,7 +36,11 @@ function catalogModel(entry: unknown, evidence: string): OpenAIModel | undefined
   if (!isRecord(entry) || typeof entry.slug !== 'string' || entry.visibility !== 'list') {
     return undefined;
   }
-  const window = entry.context_window;
+  // `context_window` is only where the Codex app starts a session (272,000 or 500,000);
+  // `max_context_window` is what the provider accepts. Measured 2026-11-27: one request of
+  // 838,527 input tokens to gpt-6.2-sol and one of 438,862 to gpt-6.2-astra both answered.
+  const ceiling = entry.max_context_window;
+  const window = typeof ceiling === 'number' && ceiling > 0 ? ceiling : entry.context_window;
   return {
     slug: entry.slug,
     capabilities: {

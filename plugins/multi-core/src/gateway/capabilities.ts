@@ -51,6 +51,14 @@ const LONG_CONTEXT: ClaudeProfile = {
   efforts: ['low', 'medium', 'high', 'xhigh', 'max'],
 };
 
+/**
+ * The smallest window that takes the 1M profile. A row can only say 200K or 1M, so a model
+ * a little short of a million (GPT-6.2 accepts 872,000 input tokens) would lose three
+ * quarters of its window at 200K. It is sized 1M instead, and the report names the shortfall:
+ * past the provider's own limit a turn fails until the conversation is compacted.
+ */
+const LONG_CONTEXT_FLOOR = 800_000;
+
 /** Every effort name a provider or Claude Code uses, weakest first. */
 const EFFORT_ORDER = ['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'];
 const MIDDLE = EFFORT_ORDER.indexOf('medium');
@@ -97,7 +105,9 @@ function windowLosses(window: number | undefined, sized: number): string[] {
     return [`real window ${count(window)}; sized ${count(sized)}`];
   }
   if (window < sized) {
-    return [`real window ${count(window)} is below the ${count(sized)} sized`];
+    return [
+      `the provider stops at ${count(window)}, below the ${count(sized)} sized: compact before then`,
+    ];
   }
   return [];
 }
@@ -153,7 +163,7 @@ export function selectProfile(
       clamped: [],
     };
   }
-  const fits = longContext && (capabilities.window ?? 0) >= LONG_CONTEXT.window;
+  const fits = longContext && (capabilities.window ?? 0) >= LONG_CONTEXT_FLOOR;
   const profile = fits ? LONG_CONTEXT : narrow;
   const effortMap: Record<string, string> = {};
   for (const effort of profile.efforts) {

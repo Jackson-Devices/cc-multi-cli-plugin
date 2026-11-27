@@ -6,6 +6,14 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for current direction and
 
 ## Unreleased
 
+- **OpenAI rows are sized 1M, not 200K.** The window was read from the Codex catalog's
+  `context_window`, which is only where the Codex app starts a session (272,000 or
+  500,000). The provider accepts `max_context_window`, 872,000 input tokens: a request
+  of 838,527 tokens to `gpt-6.2-sol` answered. A model within reach of a million now
+  takes the 1M profile, and `--capabilities` names the shortfall. Claude Code does not
+  compact on its own before the provider's limit on these rows; run `/compact` before
+  872,000.
+
 - **Antigravity rows no longer vanish from `/model`.** Gemini rows carried a `[1m]` tag
   on the model ID. Claude Code hides a tagged row on a subscription whose extra usage
   is off, and it re-reads that state from every Anthropic response, so the rows
