@@ -37,6 +37,8 @@ declare module 'claude-code' {
       agentModels: Record<string, string>;
       /** The model a provider worker resolved to, by its Agent call's tool_use_id. */
       spawnModels: Record<string, string>;
+      /** The model a provider-worker Agent call itself named, by its tool_use_id. */
+      declaredModels: Record<string, string>;
       /** A harness run's newest action, by agent id (`main` for the main loop), while it runs. */
       workerSteps: Record<string, string>;
       /** Agent types positively classified as Claude-loop on a Claude model. */

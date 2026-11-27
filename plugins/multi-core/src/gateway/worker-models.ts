@@ -26,14 +26,49 @@ export function stripWorkerModel(block: unknown, remember: RememberWorkerModel):
   return true;
 }
 
+interface Held {
+  session: string;
+  type: string;
+  model: string;
+  /** Two different models were written for one call: neither is the caller's word. */
+  conflicted?: true;
+}
+
 /** Retain selections on lookup: spawn admission can be denied or retried. */
 export class WorkerModels {
-  private readonly models = new Map<string, { session: string; type: string; model: string }>();
+  private readonly models = new Map<string, Held>();
 
   remember(session: string): RememberWorkerModel {
     return (id, type, model) => {
-      setBounded(this.models, JSON.stringify([session, id]), { session, type, model }, 2048, 'lru');
+      // A blank model is no choice: it must never read as an explicit one.
+      if (!model.trim()) {
+        return;
+      }
+      const key = JSON.stringify([session, id]);
+      const before = this.models.get(key);
+      const conflicted = before !== undefined && (before.model !== model || before.type !== type);
+      setBounded(
+        this.models,
+        key,
+        { session, type, model, ...(conflicted || before?.conflicted ? { conflicted: true } : {}) },
+        2048,
+        'lru',
+      );
     };
+  }
+
+  /**
+   * The model the caller itself wrote on one Agent call, for the pre-use check: exactly this
+   * session, call and worker type, read without consuming. A call that named no model, a
+   * conflicting record, another session's record or the sessionless fallback answers nothing,
+   * so a provider default can never pass as a declaration.
+   */
+  explicit(session: string, toolUseId: string, type: string): string | undefined {
+    if (!session) {
+      return undefined;
+    }
+    const held = this.models.get(JSON.stringify([session, toolUseId]));
+    return held && !held.conflicted && held.type === workerTypeName(type) ? held.model : undefined;
   }
 
   selection(value: Record<string, unknown>): Record<string, unknown> {

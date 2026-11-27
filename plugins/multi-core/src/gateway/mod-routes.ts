@@ -181,10 +181,42 @@ async function handlePostRoute(
         res,
         permissionModes.workerSelection(context.workerModels?.selection(parsed) ?? parsed),
       );
+    case '/multi/mod/worker-choice':
+      // What the caller itself wrote on this Agent call, for the mod to show the pre-use
+      // checks. Claude Code's Agent tool takes only its own model names, so the gateway
+      // removed it from the call; the checks would otherwise see no model at all.
+      return reply(res, workerChoice(parsed, sessionId, context));
     case '/multi/mod/worker':
       return await workerRoute(res, parsed, key, permissionModes);
     default:
       throw new Error('Unknown mod route');
+  }
+}
+
+/**
+ * The explicit model of one provider-worker Agent call, as the caller spelled it. Only a
+ * model the worker's own catalog resolves is a declaration; anything else answers
+ * `explicit: false`, which leaves the call looking exactly as it does with no model.
+ */
+function workerChoice(
+  parsed: Record<string, unknown>,
+  sessionId: string,
+  { workerModels, permissionModes }: ModRouteContext,
+): { explicit: false } | { explicit: true; model: string; canonical: string } {
+  const toolUseId = text(parsed.toolUseId, 'toolUseId');
+  const subagentType = text(parsed.subagentType, 'subagentType');
+  const model = workerModels?.explicit(sessionId, toolUseId, subagentType);
+  if (model === undefined || !permissionModes) {
+    return { explicit: false };
+  }
+  try {
+    const resolved = permissionModes.workerSelection({ ...parsed, subagentType, model });
+    return resolved.worker && resolved.model
+      ? { explicit: true, model, canonical: resolved.model }
+      : { explicit: false };
+  } catch {
+    // An unknown or another provider's model: the spawn refuses it with the reason.
+    return { explicit: false };
   }
 }
 

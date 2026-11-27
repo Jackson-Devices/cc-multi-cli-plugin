@@ -6,6 +6,14 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for current direction and
 
 ## Unreleased
 
+- **Pre-use hooks see a provider worker's model.** Claude Code's Agent tool takes only its
+  own model names, so the gateway removes a provider model from the call before Claude
+  Code reads it, and every `PreToolUse` hook then saw an Agent call with no model. A hook
+  that requires a declared model refused every provider worker. Multi's hooks module now
+  passes the call down to those hooks with the model the caller wrote. The tool's own
+  arguments are unchanged, a call that names no model still shows none, and the spawn asks
+  for the model the hooks were shown, so a provider default never replaces a declared one.
+
 - **OpenAI rows are sized 1M, not 200K.** The window was read from the Codex catalog's
   `context_window`, which is only where the Codex app starts a session (272,000 or
   500,000). The provider accepts `max_context_window`, 872,000 input tokens: a request

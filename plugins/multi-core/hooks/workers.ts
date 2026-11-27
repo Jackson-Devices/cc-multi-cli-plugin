@@ -17,6 +17,12 @@ const spawnModels = atom(
   { plugin: 'multi-core', key: 'spawnModels' } as const,
   {} as Record<string, string>,
 );
+// The model each provider-worker Agent call named, by its call id: what the pre-use checks
+// were shown, and therefore what the spawn must run.
+const declaredModels = atom(
+  { plugin: 'multi-core', key: 'declaredModels' } as const,
+  {} as Record<string, string>,
+);
 const claudeTypes = atom({ plugin: 'multi-core', key: 'claudeTypes' } as const, [] as string[]);
 const offeredProviders = atom(
   { plugin: 'multi-core', key: 'offeredProviders' } as const,
@@ -76,6 +82,27 @@ export const register = (on: Parameters<Register>[0], _options: Parameters<Regis
       return described;
     }
     return { ...described, description: `${described.description}${providerGuidance}` };
+  });
+  // Claude Code's Agent tool takes only its own model names, so the gateway removes a
+  // provider model from the call before Claude Code reads it. Every pre-use check (a
+  // settings hook, another plugin's) then sees a call with no model. This hook sits above
+  // them in the chain and passes the call down with the model the caller wrote. The tool's
+  // real arguments are untouched: no `updatedInput` is set here, and one a check returns
+  // loses the model again, since the tool's schema would refuse it.
+  // Matched on the tool: the usage hook already registers this event without a matcher, and
+  // one module may register an event unmatched only once.
+  on('classic.PreToolUse', { tool: 'Agent' }, async ($, event, next) => {
+    const model = (await isActive(wire($))) ? await declaredModel($, event) : undefined;
+    if (model === undefined) {
+      return next(event);
+    }
+    const result = await next({ ...event, model } as typeof event);
+    const updated = result?.updatedInput;
+    if (!updated || updated.model !== model) {
+      return result;
+    }
+    const { model: _shown, ...rest } = updated;
+    return { ...result, updatedInput: rest };
   });
   on('agent.offer', async ($, event, next) => {
     if (!(await isActive(wire($)))) {
@@ -187,7 +214,43 @@ async function markOffered($: EngineInterface, agent: string, isOffered: boolean
   $.ui.invalidate('tool.describe');
 }
 
+/**
+ * The model a provider-worker Agent call named, or nothing: a call that named none stays
+ * without one, so a check that requires a declared model still refuses it. Never the
+ * provider's default.
+ */
+async function declaredModel(
+  $: EngineInterface,
+  event: { tool: string; tool_use_id?: string; [argument: string]: unknown },
+): Promise<string | undefined> {
+  if (
+    event.tool !== 'Agent' ||
+    event.model !== undefined ||
+    typeof event.subagent_type !== 'string' ||
+    typeof event.tool_use_id !== 'string' ||
+    !isProviderWorker(event.subagent_type)
+  ) {
+    return undefined;
+  }
+  const callId = event.tool_use_id;
+  const choice = await postJson(wire($), '/multi/mod/worker-choice', {
+    sessionId: await $.session.id(),
+    toolUseId: callId,
+    subagentType: event.subagent_type,
+    cwd: await $.session.cwd(),
+  });
+  const model = choice?.explicit === true ? choice.model : undefined;
+  if (typeof model !== 'string' || !model) {
+    return undefined;
+  }
+  await update($, declaredModels, (held) => withBounded(held, callId, model));
+  return model;
+}
+
 async function spawnPayload($: EngineInterface, event: SpawnEvent) {
+  // The model the checks were shown is the one the spawn asks for, even if the gateway's
+  // own record of it has gone: a provider default never replaces a declared model.
+  const declared = (await read($, declaredModels))[event.tool_use_id];
   return {
     sessionId: await $.session.id(),
     toolUseId: event.tool_use_id,
@@ -195,7 +258,7 @@ async function spawnPayload($: EngineInterface, event: SpawnEvent) {
     permissionMode: event.permissionMode,
     subagentType: event.subagentType,
     cwd: event.cwd ?? (await $.session.cwd()),
-    model: event.model,
+    model: event.model ?? declared,
     parentModel: event.parentModel,
     fork: event.fork,
     background: event.background,

@@ -226,6 +226,7 @@ export function authorizeRequest(
       '/multi/mod/session',
       '/multi/mod/worker',
       '/multi/mod/worker-model',
+      '/multi/mod/worker-choice',
       '/multi/mod/mode',
       '/multi/mod/policy',
       '/multi/mod/offer',
